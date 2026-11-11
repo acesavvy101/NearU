@@ -1,0 +1,224 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NearU Location Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 520px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f3f7fa;
+      color: #172b4d;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 3px 12px #00000012;
+    }
+    button {
+      background: #087f8c;
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .sos { background: #d62828; }
+    .cancel { background: #555; }
+    .status { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>NearU</h1>
+  <p>Location & SOS Prototype</p>
+
+  <div class="card">
+    <h2>My Location</h2>
+    <button id="gpsBtn">Get My Location</button>
+    <p id="locationStatus" class="status">
+      Location not requested.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Nearby Helpers</h2>
+    <p>Demo users within 100 metres</p>
+    <div id="nearbyList">
+      Enable location to search.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Emergency Assistance</h2>
+    <button id="sosBtn" class="sos" disabled>
+      Create SOS Request
+    </button>
+    <button id="ackBtn" disabled>
+      Simulate Volunteer Acknowledgement
+    </button>
+    <button id="cancelBtn" class="cancel" disabled>
+      Cancel SOS
+    </button>
+    <p id="sosStatus" class="status">
+      No active request.
+    </p>
+  </div>
+
+  <script type="module">
+    import {
+      getCurrentLocation,
+      findNearbyUsers,
+      calculateDistance
+    } from "./src/services/location.js";
+
+    import {
+      createSOSRequest,
+      acknowledgeSOS,
+      cancelSOS
+    } from "./src/services/sos.js";
+
+    const gpsBtn = document.getElementById("gpsBtn");
+    const sosBtn = document.getElementById("sosBtn");
+    const ackBtn = document.getElementById("ackBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+
+    const locationStatus =
+      document.getElementById("locationStatus");
+    const nearbyList =
+      document.getElementById("nearbyList");
+    const sosStatus =
+      document.getElementById("sosStatus");
+
+    let myLocation = null;
+    let currentSOS = null;
+
+    // These are simulated helpers, not real users.
+    function createDemoUsers(location) {
+      return [
+        {
+          id: "helper1",
+          name: "Demo Helper A",
+          latitude: location.latitude + 0.0002,
+          longitude: location.longitude
+        },
+        {
+          id: "helper2",
+          name: "Demo Helper B",
+          latitude: location.latitude,
+          longitude: location.longitude + 0.0004
+        },
+        {
+          id: "helper3",
+          name: "Demo Helper C",
+          latitude: location.latitude + 0.003,
+          longitude: location.longitude
+        }
+      ];
+    }
+
+    gpsBtn.addEventListener("click", async () => {
+      gpsBtn.disabled = true;
+      locationStatus.textContent =
+        "Requesting GPS permission...";
+
+      try {
+        myLocation = await getCurrentLocation();
+
+        locationStatus.textContent =
+          `Latitude: ${myLocation.latitude.toFixed(5)}
+           Longitude: ${myLocation.longitude.toFixed(5)}
+           Accuracy: ±${Math.round(myLocation.accuracy)}m`;
+
+        const users = createDemoUsers(myLocation);
+        const nearby = findNearbyUsers(myLocation, users, 100);
+
+        nearbyList.replaceChildren();
+
+        for (const user of nearby) {
+          const distance = calculateDistance(
+            myLocation.latitude,
+            myLocation.longitude,
+            user.latitude,
+            user.longitude
+          );
+
+          const p = document.createElement("p");
+          p.textContent =
+            `${user.name} — ${Math.round(distance)}m away`;
+          nearbyList.appendChild(p);
+        }
+
+        if (nearby.length === 0) {
+          nearbyList.textContent = "No helpers nearby.";
+        }
+
+        sosBtn.disabled = false;
+      } catch (error) {
+        locationStatus.textContent =
+          `Location error: ${error.message}`;
+      } finally {
+        gpsBtn.disabled = false;
+      }
+    });
+
+    sosBtn.addEventListener("click", () => {
+      if (!myLocation) return;
+
+      currentSOS = createSOSRequest(
+        "demo-user",
+        myLocation,
+        "I need assistance nearby."
+      );
+
+      sosStatus.textContent =
+        `SOS created locally: ${currentSOS.status}`;
+
+      sosBtn.disabled = true;
+      ackBtn.disabled = false;
+      cancelBtn.disabled = false;
+    });
+
+    ackBtn.addEventListener("click", () => {
+      if (!currentSOS) return;
+
+      currentSOS = acknowledgeSOS(
+        currentSOS,
+        "demo-volunteer"
+      );
+
+      sosStatus.textContent =
+        `SOS acknowledged by demo volunteer.`;
+
+      ackBtn.disabled = true;
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      if (!currentSOS) return;
+
+      currentSOS = cancelSOS(
+        currentSOS,
+        "demo-user"
+      );
+
+      sosStatus.textContent = "SOS cancelled locally.";
+      sosBtn.disabled = false;
+      ackBtn.disabled = true;
+      cancelBtn.disabled = true;
+      currentSOS = null;
+    });
+  </script>
+</body>
+</html>
